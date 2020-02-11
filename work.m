@@ -1,0 +1,426 @@
+function varargout = work(varargin)
+% WORK MATLAB code for work.fig
+%      WORK, by itself, creates a new WORK or raises the existing
+%      singleton*.
+%
+%      H = WORK returns the handle to a new WORK or the handle to
+%      the existing singleton*.
+%
+%      WORK('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in WORK.M with the given input arguments.
+%
+%      WORK('Property','Value',...) creates a new WORK or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before work_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to work_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+
+% Edit the above text to modify the response to help work
+
+% Last Modified by GUIDE v2.5 14-Jul-2018 02:02:19
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @work_OpeningFcn, ...
+                   'gui_OutputFcn',  @work_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+% End initialization code - DO NOT EDIT
+
+
+% --- Executes just before work is made visible.
+function work_OpeningFcn(hObject, eventdata, handles, varargin)
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to work (see VARARGIN)
+
+% Choose default command line output for work
+handles.output = hObject;
+
+% Update handles structure
+guidata(hObject, handles);
+
+% UIWAIT makes work wait for user response (see UIRESUME)
+% uiwait(handles.figure1);
+
+%initialize change of option buttons for each groups
+set(handles.computeMethod,'SelectionChangeFcn',@computeMethod_Change);
+set(handles.iterateMethod,'SelectionChangeFcn',@iterateMethod_Change);
+
+%initialize compute methods
+handles.computeM ='sfpf';
+handles.iterateM ='gaus';
+handles.rfval ='';
+%update handles with new values
+guidata(hObject,handles);
+
+% --- Outputs from this function are returned to the command line.
+function varargout = work_OutputFcn(hObject, eventdata, handles) 
+varargout{1} = handles.output;
+
+
+function gridData_Callback(hObject, eventdata, handles)
+
+function gridData_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+%****************
+%COMPUTATIONAL METHOD
+%****************
+%change in computation method
+function computeMethod_Change(hObject, eventdata)
+handles = guidata(hObject);
+switch get(eventdata.NewValue, 'Tag')
+    case 'sfpf'
+       % errordlg('sfpf','Error');
+        handles.computeM ='sfpf';
+    case 'dfpf'
+       % errordlg('dfpf','Error');
+        handles.computeM ='dfpf';
+    otherwise
+end
+%update handles with new values
+guidata(hObject,handles);
+
+
+%****************
+%ITERATION METHOD
+%****************
+%change in iteration method
+function iterateMethod_Change(hObject, eventdata)
+handles = guidata(hObject);
+switch get(eventdata.NewValue, 'Tag')
+    case 'jacobian'
+       % errordlg('jacobian','Error');
+        handles.iterateM ='jacobian';
+    case 'gaus'
+       % errordlg('gaus','Error');
+        handles.iterateM ='gaus';
+    case 'sor'
+        %errordlg(handles.rfval,'Error');
+        handles.iterateM ='sor';
+    otherwise
+end
+%update handles with new values
+guidata(hObject,handles);
+
+%******************************
+%SFPF
+%*****************************
+
+function sfpf(matrix_in, l_x, l_y,im,handles)
+    grid_data = reshape(str2double(regexp(matrix_in,'[+-]?\d+\.?\d*','match')),l_y,[]);
+    
+    %display at command window
+    fprintf(' ---------------------\n');
+    fprintf(' The Given Grid System\n');
+    fprintf(' ---------------------\n');
+    disp(grid_data);
+    
+    calcVal = grid_data;%set grid to a new grid
+    out = grid_data;    %set grid to a new grid
+    err = 1;            %error tolerance
+    conv_v =1d-6;       %1.0000e-06
+    k = 0;              %initialise iteration
+    %display(handles.rfval);
+    fprintf(' ----------------------------------------------------------------------------------------------------------------------\n');
+    fprintf(' The List Of Result For Each Iteration - Using %s Iteration Method And Standard Five Point Formular (SFPF) \n',upper(im));
+    fprintf(' -----------------------------------------------------------------------------------------------------------------------\n');
+    
+    %display headings with this
+    fprintf('    k |')
+    for rs = 1 : l_y - 2
+        for cs = 1 : l_x - 2
+            fprintf('   u(%1i,%1i) |',rs,cs)
+        end
+    end
+    fprintf('   Error   |\n')
+    
+    %iterate for the result
+    while err > conv_v
+        k = k + 1;      %increment the loop
+        fprintf(' %4i |',k)
+
+        %main calculations
+        for rs =l_y - 1:-1: 2
+            for cs = 2 : l_x - 1
+                if strcmp(im,'gaus')
+                    %laplace with gaussiedel
+                    calcVal(rs,cs)= 0.25*(grid_data(rs-1,cs) + out(rs+1,cs) + grid_data(rs,cs-1) + out(rs,cs+1));
+                    out = grid_data;
+                    grid_data = calcVal;
+                end
+                if strcmp(im,'jacobian')
+                    %laplace with jacobian
+                    calcVal(rs,cs)= 0.25*(grid_data(rs-1,cs) + grid_data(rs+1,cs) + grid_data(rs,cs-1) + grid_data(rs,cs+1));
+                end
+                if strcmp(im,'sor')
+                    %laplace with sor method
+                    r_factor = str2double(handles.rfval);
+                    calcVal(rs,cs)= ((r_factor/4)*(grid_data(rs-1,cs) + out(rs+1,cs) + grid_data(rs,cs-1) + out(rs,cs+1))) + (1 - r_factor)*out(rs,cs);
+                    out = grid_data;
+                    grid_data = calcVal;
+                end
+                fprintf(' %8.6f |',calcVal(rs,cs))
+            end
+        end
+       
+        %because of Jacobi
+        if strcmp(im,'jacobian')
+            %estimate error at each calculations - jacobi
+            err = sqrt(sum(sum((calcVal - grid_data).^2)));
+            grid_data = calcVal;
+        else
+            %estimate error at each calculations - gaus / sor
+            err = sqrt(sum(sum((out - grid_data).^2)));
+        end
+        fprintf(' %8.6f  |\n',err);
+    end
+    %display the new matrix
+    fprintf('---------------------\n');
+    fprintf(' The Final Grid System\n');
+    %fprintf('----------------------\n');
+    disp(grid_data);
+
+
+
+%******************************
+%DFPF
+%*****************************
+
+function dfpf(matrix_in, l_x, l_y,im,handles)
+    grid_data = reshape(str2double(regexp(matrix_in,'[+-]?\d+\.?\d*','match')),l_y,[]);
+    %guidata(handles);
+    %display at command window
+    fprintf(' ---------------------\n');
+    fprintf(' The Given Grid System\n');
+    fprintf(' ---------------------\n');
+    disp(grid_data);
+    
+    %display at the GUI
+    %set(handles.inGrid,'String','');
+    %set(handles.inGrid,'String',num2str(grid_data));
+    %
+    calcVal = grid_data;%set grid to a new grid
+    out = grid_data;    %set grid to a new grid
+    err = 1;            %error tolerance
+    conv_v =1d-6;       %1.0000e-06
+    k = 1;              %initialise iteration
+    fprintf(' ----------------------------------------------------------------------------------------------------------------------\n');
+    fprintf(' The List Of Result For Each Iteration - Using %s Iteration Method And Diagonal Five Point Formular (DFPF) \n',upper(im));
+    fprintf(' -----------------------------------------------------------------------------------------------------------------------\n');
+    %display headings with this
+    fprintf('    k |')
+    for rs = 1 : l_y - 2
+        for cs = 1 : l_x - 2
+            fprintf('   u(%1i,%1i) |',rs,cs)
+        end
+    end
+    fprintf('   Error   |\n')
+    %display value k to be first iteration
+    fprintf(' %4i |',k)
+    
+    %calculate the first odd sets
+    out(3,3) = 0.25*(out(5,5) + out(1,1) + out(5,1) +out(1,5));
+    out(2,2) = 0.25*(out(3,3) + out(1,3) + out(3,1) +out(1,1));
+    out(2,4) = 0.25*(out(3,3) + out(1,3) + out(3,5) +out(1,5));
+    out(4,4) = 0.25*(out(5,5) + out(3,3) + out(5,3) +out(3,5));
+    out(4,2) = 0.25*(out(5,3) + out(5,1) + out(3,1) +out(3,3));
+    
+    %calculate the first evens sets
+    out(2,3) = 0.25*(out(1,3) + out(2,2) + out(3,3) +out(2,4));
+    out(3,2) = 0.25*(out(3,1) + out(2,2) + out(3,3) +out(4,2));
+    out(4,3) = 0.25*(out(5,3) + out(4,4) + out(3,3) +out(4,2));
+    out(3,4) = 0.25*(out(3,5) + out(2,4) + out(3,3) +out(4,4));
+    
+    %display calculated odd values
+    for rs =l_y - 1 :-1: 2
+        for cs = 2 : l_x - 1
+           fprintf(' %8.6f |',out(rs,cs))
+        end
+    end
+    err = sqrt(sum(sum((out - grid_data).^2)));
+    fprintf(' %8.6f  |\n',err);
+    
+    grid_data = out;
+    %disp(grid_data)
+    
+    %iterate for the result
+    while err > conv_v
+        k = k + 1;      %increment the loop
+        fprintf(' %4i |',k)
+        
+        %main calculations
+        for rs =l_y - 1:-1: 2
+            for cs = 2 : l_x - 1
+                if strcmp(im,'gaus')
+                    %laplace with gaussiedel
+                    calcVal(rs,cs)= 0.25*(grid_data(rs-1,cs) + out(rs+1,cs) + grid_data(rs,cs-1) + out(rs,cs+1));
+                    out = grid_data;
+                    grid_data = calcVal;
+                end
+                if strcmp(im,'jacobian')
+                    %laplace with jacobian
+                    calcVal(rs,cs)= 0.25*(grid_data(rs-1,cs) + grid_data(rs+1,cs) + grid_data(rs,cs-1) + grid_data(rs,cs+1));
+                end
+                if strcmp(im,'sor')
+                    %laplace with sor method
+                    r_factor = str2double(handles.rfval);
+                    calcVal(rs,cs)= ((r_factor/4)*(grid_data(rs-1,cs) + out(rs+1,cs) + grid_data(rs,cs-1) + out(rs,cs+1))) + (1 - r_factor)*out(rs,cs);
+                    out = grid_data;
+                    grid_data = calcVal;
+                end
+                fprintf(' %8.6f |',calcVal(rs,cs))
+            end
+        end
+        %because of Jacobi
+        if strcmp(im,'jacobian')
+            %estimate error at each calculations - jacobi
+            err = sqrt(sum(sum((calcVal - grid_data).^2)));
+            grid_data = calcVal;
+        else
+            %estimate error at each calculations - gaus / sor
+            err = sqrt(sum(sum((out - grid_data).^2)));
+        end
+        fprintf(' %8.6f  |\n',err);
+    end
+
+    %display the new matrix at command window
+    fprintf('---------------------\n');
+    fprintf(' The Final Grid System\n');
+    fprintf(' ---------------------\n');
+    disp(grid_data);
+    %display the new matrix at GUI
+    %set(handles.outGrid,'String','');
+    %set(handles.outGrid,'String',num2str(grid_data));
+%****************
+%****************
+
+
+function verify_method_of_computation(gridData,nx,ny,handles)
+%errordlg('was here !!','Error');
+nx = str2double(nx);
+ny = str2double(ny);
+im = handles.iterateM;
+cm = handles.computeM;
+
+if  strcmp(cm,'sfpf')
+    sfpf(gridData,nx,ny,im,handles);
+else
+    mat = reshape(str2double(regexp(gridData,'[+-]?\d+\.?\d*','match')),ny,[]);
+    [nym nxm]=size(mat);
+    if ny==5 && ny==nx && nym==5 && nxm==5
+        dfpf(gridData,nx,ny,im,handles);
+    else
+        errordlg('To Use this DFPF Method, the Grid dimension must be 5 X 5','Error');
+    end
+end
+
+%****************
+%CHECK FOR EMPTY DTAS
+%****************
+
+%check empty
+function checkempty(handles)
+gridData = get(handles.gridData,'String');
+nx = get(handles.nx,'String');
+ny = get(handles.ny,'String');
+if(isempty(gridData) || isempty(nx) || isempty(ny))
+    errordlg('Provide the Grid in Matrics and Specify Row and Column Size !!','Error');
+    return;
+else
+    %check if ny and nx are numbers
+    if(str2double(ny)> 0 && str2double(nx)> 0)
+        verify_method_of_computation(gridData,nx,ny,handles);
+    else
+        errordlg('The Specified Row and Column Size must be numbers!!','Error');
+        return
+    end
+end
+
+%****************
+%****************
+
+% --- Executes on button press in compute.
+function compute_Callback(hObject, eventdata, handles)
+if strcmp(handles.iterateM,'sor')
+    a = get(handles.rf,'String');
+    if isempty(a) || str2double(a) <= 0
+         errordlg('To Use SOR Method, Relaxation Factor Must Be Specified  !!','Error');
+         return;
+    else
+         handles.rfval = get(handles.rf,'String');
+         %update handles with new values
+         guidata(hObject,handles);
+         checkempty(handles);
+    end
+else
+    checkempty(handles);
+end
+
+
+% --- Executes on button press in reset.
+function reset_Callback(hObject, eventdata, handles)
+
+
+
+
+
+function ny_Callback(hObject, eventdata, handles)
+
+
+function ny_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function nx_Callback(hObject, eventdata, handles)
+
+function nx_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+
+
+
+function rf_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function rf_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in pushbutton3.
+function pushbutton3_Callback(hObject, eventdata, handles)
+button = questdlg('Are You Sure You Want To Close The App ?', 'LAPLACE SOLUTIONS - NUMERICAL METHOD');
+if strcmp(button, 'Yes')
+    delete(handles.figure1);
+end
